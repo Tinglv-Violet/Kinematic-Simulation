@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>运动学可视化 - 小车直线运动模拟</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --primary-light: #f0f7ff;
+            --background-color: #f4f7f9;
+            --card-bg-color: #ffffff;
+            --text-color: #333;
+            --text-light-color: #6c757d;
+            --border-color: #e9ecef;
+            --shadow-color: rgba(0, 0, 0, 0.05);
+            --danger-color: #dc3545;
+            --success-color: #28a745;
+            --nav-width: 200px;
+            --nav-width-collapsed: 60px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        /* New App Wrapper Layout */
+        .app-wrapper {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Main Navigation */
+        #main-nav {
+            width: var(--nav-width);
+            background-color: var(--card-bg-color);
+            box-shadow: 2px 0 10px var(--shadow-color);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease;
+        }
+        #main-nav.collapsed {
+            width: var(--nav-width-collapsed);
+        }
+        .nav-header {
+            padding: 18px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .nav-header .logo-text {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--primary-color);
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+        #main-nav.collapsed .logo-text {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .nav-links {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+        .nav-links a {
+            display: flex;
+            align-items: center;
+            padding: 15px 18px;
+            color: var(--text-light-color);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .nav-links a:hover {
+            background-color: var(--primary-light);
+            color: var(--primary-color);
+        }
+        .nav-links a.active {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: bold;
+        }
+        .nav-links .nav-icon {
+            font-size: 20px;
+            min-width: 24px;
+            margin-right: 18px;
+        }
+        .nav-toggle {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Main Content Area */
+        .content-wrapper {
+            flex-grow: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page {
+            display: none;
+            height: 100%;
+            overflow: hidden;
+        }
+        .page.active {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* App Layout */
+        .app-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 280px;
+            grid-template-rows: auto 1fr;
+            grid-template-areas:
+                "header header header"
+                "sidebar-left main sidebar-right";
+            flex-grow: 1;
+            gap: 16px;
+            padding: 16px;
+        }
+
+        /* Header */
+        header {
+            grid-area: header;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
+            margin-bottom: 8px; /* Added margin */
+        }
+        .header-title h1 {
+            font-size: 22px;
+            margin: 0;
+            color: var(--primary-color);
+        }
+        .header-title p {
+            font-size: 14px;
+            margin: 4px 0 0;
+            color: var(--text-light-color);
+        }
+        .header-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Sidebars */
+        .sidebar {
+            background-color: var(--card-bg-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px var(--shadow-color);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+        .sidebar-left { grid-area: sidebar-left; }
+        .sidebar-right { grid-area: sidebar-right; }
+
+        .sidebar-section {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+        .sidebar-section:last-child {
+            border-bottom: none;
+        }
+        .sidebar-section h3 {
+            font-size: 16px;
+            margin: 0 0 15px;
+            font-weight: 600;
+        }
+
+        /* Main Content */
+        main {
+            grid-area: main;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .simulation-area, .graph-area {
+            background-color: var(--card-bg-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px var(--shadow-color);
+            padding: 20px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        .simulation-area {
+            height: 200px;
+        }
+        .graph-area {
+            flex-grow: 1;
+        }
+        #simulation-canvas {
+            width: 100%;
+            height: 100%;
+            background-color: var(--primary-light);
+            border-radius: 8px;
+        }
+        #graph-canvas {
+            flex-grow: 1;
+        }
+        .formula-display {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            color: var(--text-color);
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            text-align: center;
+            min-height: 32px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* UI Controls & Elements */
+        .control-group { margin-bottom: 12px; }
+        .control-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .control-group input[type="text"],
+        .control-group input[type="number"],
+        .control-group select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 0;
+        }
+        .checkbox-group label { margin-bottom: 0; }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-primary:hover { background-color: #0069d9; transform: translateY(-1px); }
+        .btn-danger { background-color: var(--danger-color); color: white; }
+        .btn-danger:hover { background-color: #c82333; }
+        .btn-success { background-color: var(--success-color); color: white; }
+        .btn-success:hover { background-color: #218838; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-secondary:hover { background-color: #5a6268; }
+
+        .list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px;
+            background-color: var(--primary-light);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .list-item button {
+            background: none; border: none; color: var(--text-light-color); cursor: pointer; font-size: 16px; line-height: 1; margin-left: 8px;
+        }
+        .list-item button.delete-btn { color: var(--danger-color); font-size: 18px; }
+
+        /* Right Sidebar Dashboard */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 12px;
+            font-size: 14px;
+            align-items: center;
+        }
+        .dashboard-grid span:first-child { color: var(--text-light-color); }
+        .dashboard-grid span:last-child { font-weight: 600; text-align: right; }
+        .car-dashboard-header { display: flex; align-items: center; gap: 8px; font-weight: bold; margin-bottom: 10px; }
+        .car-color-indicator { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 3px rgba(0,0,0,0.2); }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.4); z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .modal-overlay.visible { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background: var(--card-bg-color); border-radius: 12px;
+            padding: 25px; width: 90%; max-width: 600px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-body {
+            overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h2 { margin: 0; font-size: 20px; }
+        .modal-close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light-color); }
+        .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        
+        .mode-switch {
+            display: flex;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        .mode-switch button {
+            flex: 1;
+            padding: 8px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-light-color);
+            transition: all 0.2s ease;
+        }
+        .mode-switch button.active {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: bold;
+        }
+        
+        /* Analysis Pages Specifics */
+        .analysis-page {
+            padding: 24px;
+            overflow-y: auto;
+            background: var(--background-color);
+        }
+        .analysis-container {
+             background-color: var(--card-bg-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px var(--shadow-color);
+            margin-bottom: 20px;
+        }
+        .strobe-grid {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 20px;
+        }
+        #strobe-snapshot-canvas { width: 100%; height: 120px; background-color: var(--primary-light); border-radius: 8px; margin-bottom: 15px; }
+        #strobe-table-container { max-height: 400px; overflow-y: auto; }
+        #strobe-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        #strobe-table th, #strobe-table td { padding: 8px; border: 1px solid var(--border-color); text-align: center; }
+        #strobe-table th { background-color: var(--primary-light); }
+        .chase-charts-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 40vh; margin-top: 15px; }
+        #fitting-chart-container { height: 400px; }
+    </style>
+</head>
+<body>
+
+    <div class="app-wrapper">
+        <nav id="main-nav">
+            <div class="nav-header">
+                <span class="logo-text">运动学模拟</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" class="nav-link active" data-page="page-simulation"><span class="nav-icon">▶</span> <span class="nav-text">实时模拟</span></a></li>
+                <li><a href="#" class="nav-link" data-page="page-strobe"><span class="nav-icon">▚</span> <span class="nav-text">频闪分析</span></a></li>
+                <li><a href="#" class="nav-link" data-page="page-chase"><span class="nav-icon">⛗</span> <span class="nav-text">追击相遇</span></a></li>
+                 <li><a href="#" class="nav-link" data-page="page-fitting"><span class="nav-icon">📈</span> <span class="nav-text">函数拟合</span></a></li>
+            </ul>
+             <div class="nav-toggle">
+                <a href="#" id="nav-toggle-btn"><span class="nav-icon" style="text-align: center; display: block;">↔</span></a>
+            </div>
+        </nav>
+        <div class="content-wrapper">
+            <div id="page-simulation" class="page active">
+                <div class="app-container">
+                    <header>
+                        <div class="header-title">
+                            <h1>实时模拟</h1>
+                            <p>配置参数并观察小车的实时运动情况</p>
+                        </div>
+                        <div class="header-controls">
+                            <button id="start-btn" class="btn btn-success">开始</button>
+                            <button id="pause-btn" class="btn btn-secondary">暂停</button>
+                            <button id="reset-btn" class="btn btn-danger">重置</button>
+                        </div>
+                    </header>
+                    <aside class="sidebar sidebar-left">
+                        <div class="sidebar-section">
+                            <h3>小车管理</h3>
+                            <div id="car-list"></div>
+                            <button id="add-car-btn" class="btn btn-primary" style="width: 100%;">添加小车</button>
+                        </div>
+                        <div class="sidebar-section">
+                            <h3>赛道 & 阻力</h3>
+                            <div class="control-group">
+                                <label for="air-resistance-select">空气阻力模型 (k=系数, v=速度)</label>
+                                <select id="air-resistance-select">
+                                    <option value="0">无</option>
+                                    <option value="k*v">f = kv (低速)</option>
+                                    <option value="k*v*v">f = kv² (高速)</option>
+                                    <option value="custom">自定义</option>
+                                </select>
+                                <input type="text" id="custom-air-resistance" placeholder="例如: k*v" style="display:none; margin-top: 5px;">
+                            </div>
+                        </div>
+                        <div class="sidebar-section">
+                            <h3>分段赛道</h3>
+                            <div id="track-segment-list"></div>
+                            <button id="add-track-segment-btn" class="btn btn-primary" style="width:100%;">添加分段</button>
+                        </div>
+                    </aside>
+                    <main>
+                        <div class="simulation-area">
+                            <canvas id="simulation-canvas"></canvas>
+                        </div>
+                        <div class="graph-area">
+                            <button id="graph-config-btn" class="btn btn-primary" style="position: absolute; top: 15px; right: 15px; z-index: 10;">配置图像</button>
+                            <canvas id="graph-canvas"></canvas>
+                        </div>
+                    </main>
+                    <aside class="sidebar sidebar-right">
+                         <div class="sidebar-section">
+                            <h3>仪表盘</h3>
+                            <div id="dashboard-content"></div>
+                        </div>
+                        <div class="sidebar-section">
+                            <h3>自定义计算</h3>
+                            <div class="control-group">
+                                <input type="text" id="custom-param-name" placeholder="参数名 (如: Ek)">
+                                <input type="text" id="custom-param-formula" placeholder="公式 (如: 0.5*m*v*v)" style="margin-top:5px;">
+                            </div>
+                            <button id="add-custom-param-btn" class="btn btn-primary" style="width:100%;">添加参数</button>
+                            <div id="custom-param-list" style="margin-top:10px;"></div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+            <div id="page-strobe" class="page analysis-page">
+                 <header>
+                    <div class="header-title"><h1>频闪分析</h1><p>分析运动过程中的关键数据点</p></div>
+                </header>
+                <div class="strobe-grid">
+                    <div class="analysis-container">
+                        <h4>赛道定格图</h4>
+                        <canvas id="strobe-snapshot-canvas"></canvas>
+                        <h4>数据表格</h4>
+                        <div id="strobe-table-container">
+                            <table id="strobe-table"></table>
+                        </div>
+                    </div>
+                    <div class="analysis-container">
+                         <h4>分析设置</h4>
+                         <div class="control-group">
+                             <label for="strobe-interval-input">采样时间间隔 (s)</label>
+                             <input type="number" id="strobe-interval-input" value="1" min="0.05" step="0.05">
+                         </div>
+                         <div class="control-group" id="strobe-columns-select">
+                            <label>显示列:</label>
+                            <input type="checkbox" id="strobe-col-t" value="t" checked> <label for="strobe-col-t">t</label>
+                            <input type="checkbox" id="strobe-col-x" value="x" checked> <label for="strobe-col-x">x</label>
+                            <input type="checkbox" id="strobe-col-v" value="v" checked> <label for="strobe-col-v">v</label>
+                        </div>
+                        <button id="rerun-strobe-btn" class="btn btn-primary" style="width:100%">重新分析</button>
+                    </div>
+                </div>
+            </div>
+            <div id="page-chase" class="page analysis-page">
+                <header>
+                    <div class="header-title"><h1>追击相遇分析</h1><p>通过图像和数据找到小车的相遇点</p></div>
+                </header>
+                <div class="analysis-container">
+                     <div class="modal-grid">
+                        <div class="control-group">
+                            <label for="chase-car1-select">选择小车 1</label>
+                            <select id="chase-car1-select"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="chase-car2-select">选择小车 2</label>
+                            <select id="chase-car2-select"></select>
+                        </div>
+                    </div>
+                    <button id="run-chase-analysis-btn" class="btn btn-primary" style="width: 100%; margin-top: 5px;">开始分析</button>
+                </div>
+                <div class="analysis-container" id="chase-results-container" style="display: none;">
+                    <div class="chase-charts-container">
+                        <div>
+                            <h4>x-t 图像</h4>
+                            <canvas id="chase-xt-canvas"></canvas>
+                        </div>
+                        <div>
+                            <h4>v-t 图像 (点击两点计算面积)</h4>
+                            <canvas id="chase-vt-canvas"></canvas>
+                        </div>
+                    </div>
+                    <div id="chase-encounter-points"></div>
+                    <div id="chase-area-result" class="formula-display" style="margin-top: 15px; text-align: left;">面积计算结果将显示在这里。</div>
+                </div>
+            </div>
+            <div id="page-fitting" class="page analysis-page">
+                 <header>
+                    <div class="header-title"><h1>函数拟合与插值</h1><p>将实验数据与理论模型进行拟合与验证</p></div>
+                </header>
+                 <div class="analysis-container">
+                     <div class="modal-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+                        <div class="control-group">
+                            <label for="fitting-car-select">选择小车</label>
+                            <select id="fitting-car-select"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="fitting-data-select">选择数据集</label>
+                            <select id="fitting-data-select">
+                                <option value="x-t">位置-时间 (x-t)</option>
+                                <option value="v-t">速度-时间 (v-t)</option>
+                                <option value="a-t">加速度-时间 (a-t)</option>
+                                <option value="v-x">速度-位置 (v-x)</option>
+                            </select>
+                        </div>
+                         <div class="control-group">
+                            <label for="fitting-model-select">选择模型</label>
+                            <select id="fitting-model-select">
+                                <option value="linear">线性拟合</option>
+                                <option value="quadratic">二次多项式拟合</option>
+                                <option value="cubic">三次多项式拟合</option>
+                                <option value="exponential">指数拟合</option>
+                                <option value="logarithmic">对数拟合</option>
+                                <option value="lagrange">拉格朗日插值</option>
+                                <option value="fourier">傅里叶级数拟合</option>
+                            </select>
+                        </div>
+                         <button id="run-fitting-btn" class="btn btn-primary" style="align-self: end; margin-bottom: 12px;">计算</button>
+                    </div>
+                     <div class="control-group" id="fourier-terms-control" style="display: none;">
+                        <label for="fourier-terms-input">傅里叶级数阶数 (1-10)</label>
+                        <input type="number" id="fourier-terms-input" value="3" min="1" max="10">
+                    </div>
+                </div>
+                <div class="analysis-container" id="fitting-results-container" style="display: none;">
+                    <div id="fitting-chart-container">
+                        <canvas id="fitting-chart-canvas"></canvas>
+                    </div>
+                    <div class="formula-display" id="fitting-formula-display"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="car-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="car-modal-title">添加新小车</h2>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mode-switch">
+                    <button id="force-mode-btn" class="active">受力模式</button>
+                    <button id="kinematic-mode-btn">恒加速度模式</button>
+                </div>
+                <div class="modal-grid">
+                    <div class="control-group">
+                        <label for="car-modal-name">名称</label>
+                        <input type="text" id="car-modal-name" value="小车">
+                    </div>
+                     <div class="control-group">
+                        <label for="car-modal-initialX">初始位置 x₀ (m)</label>
+                        <input type="number" id="car-modal-initialX" value="0">
+                    </div>
+                    <div class="control-group">
+                        <label for="car-modal-initialV">初始速度 v₀ (m/s)</label>
+                        <input type="number" id="car-modal-initialV" value="10">
+                    </div>
+                    <div class="control-group" id="car-modal-a-group" style="display: none;">
+                        <label for="car-modal-a">加速度 a (m/s²)</label>
+                        <input type="number" id="car-modal-a" value="2">
+                    </div>
+                    <div class="control-group" id="car-modal-F-group">
+                        <label for="car-modal-F_traction">牵引力 F (N)</label>
+                        <input type="number" id="car-modal-F_traction" value="0">
+                    </div>
+                    <div class="control-group" id="car-modal-m-group">
+                        <label for="car-modal-m">质量 m (kg)</label>
+                        <input type="number" id="car-modal-m" value="1">
+                    </div>
+                     <div class="control-group">
+                        <label for="car-modal-k_air">风阻系数 k</label>
+                        <input type="number" id="car-modal-k_air" value="0.1">
+                    </div>
+                </div>
+                <button id="confirm-save-car-btn" class="btn btn-primary" style="width:100%; margin-top: 15px;">确认</button>
+            </div>
+        </div>
+    </div>
+    <div id="track-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="track-modal-title">编辑赛道分段</h2>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-grid">
+                    <div class="control-group">
+                        <label for="track-modal-start">起点 (m)</label>
+                        <input type="number" id="track-modal-start">
+                    </div>
+                    <div class="control-group">
+                        <label for="track-modal-end">终点 (m)</label>
+                        <input type="number" id="track-modal-end">
+                    </div>
+                </div>
+                 <div class="control-group">
+                    <label for="track-modal-mu">摩擦因数 μ</label>
+                    <input type="number" id="track-modal-mu" step="0.01">
+                </div>
+                <button id="confirm-save-track-btn" class="btn btn-primary" style="width:100%; margin-top: 15px;">确认</button>
+            </div>
+        </div>
+    </div>
+    <div id="graph-config-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>图像配置</h2>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="sidebar-section">
+                    <h4>坐标轴设置</h4>
+                    <div class="control-group">
+                        <label for="x-axis-select">横坐标 (X轴)</label>
+                        <select id="x-axis-select">
+                            <option value="t">时间 (t)</option>
+                            <option value="x">位移 (x)</option>
+                            <option value="v">速度 (v)</option>
+                            <option value="a">加速度 (a)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="sidebar-section">
+                    <h4>数据曲线管理</h4>
+                    <div id="graph-series-list"></div>
+                    <div class="control-group">
+                         <label for="series-car-select">选择小车</label>
+                         <select id="series-car-select"></select>
+                    </div>
+                    <div class="control-group">
+                         <label for="series-y-axis-select">选择纵坐标 (Y轴)</label>
+                         <select id="series-y-axis-select">
+                            <!-- Options will be populated dynamically -->
+                         </select>
+                    </div>
+                    <button id="add-graph-series-btn" class="btn btn-primary" style="width:100%;">添加曲线</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0/dist/chartjs-plugin-annotation.min.js"></script>
+
+    <script>
+        // ... (existing variable declarations) ...
+        const simCanvas = document.getElementById('simulation-canvas');
+        const simCtx = simCanvas.getContext('2d');
+        const graphCanvas = document.getElementById('graph-canvas');
+        
+        let cars = [];
+        let trackSegments = [];
+        let customParams = [];
+        let graphSeries = [];
+        let animationFrameId;
+        let isRunning = false;
+        let simulationTime = 0;
+        const dt = 0.016;
+        const g = 9.8;
+
+        const colors = ['#007bff', '#dc3545', '#28a745', '#ffc107', '#17a2b8', '#6f42c1'];
+        let colorIndex = 0;
+        let chart;
+        
+        let editingCarId = null;
+        let editingTrackId = null;
+        let viewCenter = 0;
+        let viewWidth = 220;
+        let fittingChart;
+        let chaseXtChart, chaseVtChart;
+        let areaSelection = {
+            chart: null,
+            datasetIndex: null,
+            startIndex: null,
+            endIndex: null
+        };
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setupUIEventListeners();
+            initializeDefaultState();
+            renderAll();
+            createChart();
+        });
+
+        function setupUIEventListeners() {
+            // ... (keep most existing listeners) ...
+            document.getElementById('start-btn').addEventListener('click', startSimulation);
+            document.getElementById('pause-btn').addEventListener('click', pauseSimulation);
+            document.getElementById('reset-btn').addEventListener('click', resetSimulation);
+            document.getElementById('graph-config-btn').addEventListener('click', () => toggleModal('graph-config-modal', true));
+            document.getElementById('add-car-btn').addEventListener('click', openAddCarModal);
+            
+            document.querySelectorAll('.modal-close-btn').forEach(btn => {
+                btn.addEventListener('click', () => btn.closest('.modal-overlay').classList.remove('visible'));
+            });
+            document.querySelectorAll('.modal-overlay').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('modal-overlay')) toggleModal(modal.id, false);
+                });
+            });
+
+            document.getElementById('confirm-save-car-btn').addEventListener('click', saveCar);
+            document.getElementById('confirm-save-track-btn').addEventListener('click', saveTrackSegment);
+
+            document.getElementById('force-mode-btn').addEventListener('click', () => setCarModalMode('force'));
+            document.getElementById('kinematic-mode-btn').addEventListener('click', () => setCarModalMode('kinematic'));
+
+            document.getElementById('add-track-segment-btn').addEventListener('click', addTrackSegment);
+            document.getElementById('air-resistance-select').addEventListener('change', (e) => {
+                document.getElementById('custom-air-resistance').style.display = e.target.value === 'custom' ? 'block' : 'none';
+            });
+            
+            document.getElementById('add-custom-param-btn').addEventListener('click', addCustomParam);
+            document.getElementById('add-graph-series-btn').addEventListener('click', addGraphSeries);
+            document.getElementById('x-axis-select').addEventListener('change', updateChart);
+            
+            document.getElementById('rerun-strobe-btn').addEventListener('click', () => {
+                generateStrobeData();
+                renderStrobeSnapshot();
+                renderStrobeTable();
+            });
+            document.getElementById('strobe-columns-select').addEventListener('change', renderStrobeTable);
+
+            document.getElementById('run-chase-analysis-btn').addEventListener('click', runChaseAnalysis);
+            document.getElementById('run-fitting-btn').addEventListener('click', runFittingAnalysis);
+
+            document.getElementById('fitting-model-select').addEventListener('change', (e) => {
+                document.getElementById('fourier-terms-control').style.display = e.target.value === 'fourier' ? 'block' : 'none';
+            });
+
+            document.getElementById('nav-toggle-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                document.getElementById('main-nav').classList.toggle('collapsed');
+            });
+
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    switchPage(link.dataset.page);
+                    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                    link.classList.add('active');
+                });
+            });
+
+            // Add click listener for area calculation
+            document.getElementById('chase-vt-canvas').addEventListener('click', handleChaseVTChartClick);
+        }
+
+        function toggleModal(modalId, show) {
+            document.getElementById(modalId).classList.toggle('visible', show);
+        }
+        
+        function simulationLoop() {
+            if (!isRunning) return;
+
+            cars.forEach(car => {
+                const currentSegment = trackSegments.find(s => car.x >= s.start && car.x < s.end) || { mu: 0 };
+                
+                let a_this_step = 0;
+                if (car.mode === 'kinematic') {
+                    a_this_step = car.initialA;
+                } else {
+                    const frictionForce = car.v !== 0 ? -Math.sign(car.v) * currentSegment.mu * car.m * g : 0;
+                    const airResistanceForce = calculateAirResistance(car);
+                    const netForce = car.F_traction + frictionForce + airResistanceForce;
+                    a_this_step = car.m > 0 ? netForce / car.m : 0;
+                }
+
+                // If moving and acceleration is opposed to velocity, check for stop
+                if (car.v !== 0 && Math.sign(a_this_step) !== Math.sign(car.v) && a_this_step !== 0) {
+                    const time_to_stop = -car.v / a_this_step;
+                    if (time_to_stop > 0 && time_to_stop < dt) {
+                        // The car stops within this time step
+                        car.x += car.v * time_to_stop + 0.5 * a_this_step * time_to_stop * time_to_stop;
+                        car.v = 0;
+                        
+                        // Check static friction
+                        const maxStaticFriction = currentSegment.mu * car.m * g;
+                        if (Math.abs(car.F_traction) <= maxStaticFriction) {
+                            car.a = 0;
+                        } else {
+                            // Overcomes static friction, recalculate acceleration
+                            const kineticFriction = -Math.sign(car.F_traction) * currentSegment.mu * car.m * g;
+                            car.a = (car.F_traction + kineticFriction) / car.m;
+                        }
+
+                    } else {
+                        // Continues as normal
+                        car.v += a_this_step * dt;
+                        car.x += car.v * dt; // Using updated velocity for this step (more stable)
+                        car.a = a_this_step;
+                    }
+                } else {
+                    // Standard update
+                    car.v += a_this_step * dt;
+                    car.x += car.v * dt;
+                    car.a = a_this_step;
+                }
+                
+                car.data.t.push(simulationTime);
+                car.data.x.push(car.x);
+                car.data.v.push(car.v);
+                car.data.a.push(car.a);
+                
+                customParams.forEach(p => {
+                    const { m, x, v, a, F_traction: F, k_air: k } = car;
+                    const t = simulationTime;
+                    let value = NaN;
+                    try {
+                        const { sin, cos, tan, pow, sqrt, log, exp } = Math;
+                        value = eval(p.formula);
+                    } catch(e) {}
+                    const key = 'custom_' + p.id;
+                    if (!car.data[key]) car.data[key] = [];
+                    car.data[key].push(value);
+                });
+            });
+
+            if (cars.length > 0) {
+                const positions = cars.map(c => c.x);
+                const minX = Math.min(...positions);
+                const maxX = Math.max(...positions);
+                let targetCenter = (minX + maxX) / 2;
+                let targetWidth = Math.max(maxX - minX + 40, 50);
+                viewCenter += (targetCenter - viewCenter) * 0.05;
+                viewWidth += (targetWidth - viewWidth) * 0.05;
+            }
+
+            simulationTime += dt;
+            renderSimulation();
+            updateDashboard();
+            updateChart();
+
+            animationFrameId = requestAnimationFrame(simulationLoop);
+        }
+
+        // ... (rest of the file is unchanged up to the fitting functions) ...
+        // All other functions like calculateAirResistance, start/pause/reset, modals, rendering etc remain the same
+        
+        // PASTE ALL FUNCTIONS FROM THE PREVIOUS VERSION HERE
+        // from calculateAirResistance down to just before the fitting functions
+        // To save space, I will omit them and jump to the changed/new functions.
+
+        function calculateAirResistance(car) {
+            const k = car.k_air, v = car.v;
+            const model = document.getElementById('air-resistance-select').value;
+            let force = 0;
+            try {
+                if (model === 'k*v') force = -k * v;
+                else if (model === 'k*v*v') force = -k * Math.sign(v) * v * v;
+                else if (model === 'custom') {
+                    const formula = document.getElementById('custom-air-resistance').value.toLowerCase();
+                    force = -Math.sign(v) * eval(formula);
+                }
+            } catch (e) { console.error("Invalid air resistance formula:", e); force = 0; }
+            return force;
+        }
+
+        function startSimulation() { if (!isRunning) { isRunning = true; animationFrameId = requestAnimationFrame(simulationLoop); } }
+        function pauseSimulation() { isRunning = false; cancelAnimationFrame(animationFrameId); }
+
+        function resetSimulation() {
+            pauseSimulation();
+            simulationTime = 0;
+            cars.forEach(car => {
+                car.x = car.initialX;
+                car.v = car.initialV;
+                car.a = car.mode === 'kinematic' ? car.initialA : 0;
+                
+                const initialData = { t: [0], x: [car.initialX], v: [car.initialV], a: [car.a] };
+                customParams.forEach(p => {
+                    const { m, k_air: k } = car;
+                    const { initialX: x, initialV: v } = car;
+                    const a = 0, t = 0, F = car.F_traction;
+                    let value = NaN;
+                     try { const sqrt = Math.sqrt; value = eval(p.formula); } catch(e) {}
+                    initialData['custom_' + p.id] = [value];
+                });
+                car.data = initialData;
+            });
+            renderAll();
+            updateChart();
+        }
+
+        function openAddCarModal() {
+            editingCarId = null;
+            document.getElementById('car-modal-title').textContent = '添加新小车';
+            document.getElementById('car-modal-name').value = `小车 ${cars.length + 1}`;
+            document.getElementById('car-modal-initialX').value = 0;
+            document.getElementById('car-modal-initialV').value = 10;
+            document.getElementById('car-modal-F_traction').value = 0;
+            document.getElementById('car-modal-m').value = 1;
+            document.getElementById('car-modal-k_air').value = 0.1;
+            document.getElementById('car-modal-a').value = 2;
+            setCarModalMode('force');
+            toggleModal('car-modal', true);
+        }
+
+        function editCar(id) {
+            const car = cars.find(c => c.id === id);
+            if (!car) return;
+            editingCarId = id;
+            document.getElementById('car-modal-title').textContent = `编辑 ${car.name}`;
+            document.getElementById('car-modal-name').value = car.name;
+            document.getElementById('car-modal-initialX').value = car.initialX;
+            document.getElementById('car-modal-initialV').value = car.initialV;
+            document.getElementById('car-modal-F_traction').value = car.F_traction;
+            document.getElementById('car-modal-m').value = car.m;
+            document.getElementById('car-modal-k_air').value = car.k_air;
+            document.getElementById('car-modal-a').value = car.initialA;
+            setCarModalMode(car.mode);
+            toggleModal('car-modal', true);
+        }
+        
+        function setCarModalMode(mode) {
+            const forceBtn = document.getElementById('force-mode-btn');
+            const kinematicBtn = document.getElementById('kinematic-mode-btn');
+            const FGroup = document.getElementById('car-modal-F-group');
+            const MGroup = document.getElementById('car-modal-m-group');
+            const AGroup = document.getElementById('car-modal-a-group');
+
+            if (mode === 'kinematic') {
+                kinematicBtn.classList.add('active');
+                forceBtn.classList.remove('active');
+                FGroup.style.display = 'none';
+                MGroup.style.display = 'none';
+                AGroup.style.display = 'block';
+            } else { // force mode
+                forceBtn.classList.add('active');
+                kinematicBtn.classList.remove('active');
+                FGroup.style.display = 'block';
+                MGroup.style.display = 'block';
+                AGroup.style.display = 'none';
+            }
+        }
+
+        function saveCar() {
+            const name = document.getElementById('car-modal-name').value;
+            const initialX = parseFloat(document.getElementById('car-modal-initialX').value);
+            const initialV = parseFloat(document.getElementById('car-modal-initialV').value);
+            const F_traction = parseFloat(document.getElementById('car-modal-F_traction').value);
+            const m = parseFloat(document.getElementById('car-modal-m').value);
+            const k_air = parseFloat(document.getElementById('car-modal-k_air').value);
+            const initialA = parseFloat(document.getElementById('car-modal-a').value);
+            const mode = document.getElementById('force-mode-btn').classList.contains('active') ? 'force' : 'kinematic';
+
+            if (editingCarId) {
+                const car = cars.find(c => c.id === editingCarId);
+                Object.assign(car, { name, initialX, initialV, F_traction, m, k_air, initialA, mode });
+            } else {
+                const newCar = {
+                    id: Date.now(), color: colors[colorIndex++ % colors.length],
+                    name, initialX, initialV, F_traction, m, k_air, initialA, mode,
+                    x: initialX, v: initialV, a: 0, data: {},
+                };
+                 cars.push(newCar);
+            }
+            resetSimulation();
+            renderCarList();
+            updateSeriesCarSelect();
+            toggleModal('car-modal', false);
+        }
+
+        function removeCar(id) {
+            cars = cars.filter(c => c.id !== id);
+            graphSeries = graphSeries.filter(s => s.carId !== id);
+            renderCarList();
+            updateSeriesCarSelect();
+            updateChart();
+        }
+
+        function addTrackSegment() {
+            const lastSegment = trackSegments.length > 0 ? trackSegments[trackSegments.length - 1] : null;
+            const start = lastSegment ? lastSegment.end : -100;
+            const newSegment = { id: Date.now(), start, end: start + 20, mu: 0.1 };
+            trackSegments.push(newSegment); renderTrackSegmentList();
+        }
+        
+        function editTrackSegment(id) {
+            const segment = trackSegments.find(s => s.id === id);
+            if (!segment) return;
+            editingTrackId = id;
+            document.getElementById('track-modal-start').value = segment.start;
+            document.getElementById('track-modal-end').value = segment.end;
+            document.getElementById('track-modal-mu').value = segment.mu;
+            toggleModal('track-modal', true);
+        }
+
+        function saveTrackSegment() {
+            const segment = trackSegments.find(s => s.id === editingTrackId);
+            if (!segment) return;
+            segment.start = parseFloat(document.getElementById('track-modal-start').value);
+            segment.end = parseFloat(document.getElementById('track-modal-end').value);
+            segment.mu = parseFloat(document.getElementById('track-modal-mu').value);
+            renderTrackSegmentList();
+            toggleModal('track-modal', false);
+        }
+
+        function removeTrackSegment(id) {
+            trackSegments = trackSegments.filter(s => s.id !== id);
+            renderTrackSegmentList();
+        }
+        
+        function addCustomParam() {
+            const nameInput = document.getElementById('custom-param-name');
+            const formulaInput = document.getElementById('custom-param-formula');
+            if (!nameInput.value || !formulaInput.value) return alert('请输入参数名称和公式！');
+            customParams.push({ id: Date.now(), name: nameInput.value, formula: formulaInput.value.toLowerCase() });
+            nameInput.value = ''; formulaInput.value = '';
+            renderCustomParamList();
+            updateGraphYAxisSelect();
+            resetSimulation();
+        }
+
+        function removeCustomParam(id) {
+            customParams = customParams.filter(p => p.id !== id);
+            renderCustomParamList();
+            updateGraphYAxisSelect();
+        }
+
+        function addGraphSeries() {
+            const carId = parseInt(document.getElementById('series-car-select').value);
+            const yAxis = document.getElementById('series-y-axis-select').value;
+            if (isNaN(carId)) return alert("请先添加至少一辆小车！");
+            const car = cars.find(c => c.id === carId);
+            if (!car || graphSeries.some(s => s.carId === carId && s.yAxis === yAxis)) return;
+
+            const yAxisOption = document.querySelector(`#series-y-axis-select option[value="${yAxis}"]`);
+            const yAxisLabel = yAxisOption ? yAxisOption.textContent : yAxis;
+
+            graphSeries.push({ id: Date.now(), carId: car.id, carName: car.name, yAxis: yAxis, yAxisLabel: yAxisLabel, color: car.color });
+            renderGraphSeriesList();
+            updateChart();
+        }
+
+        function removeGraphSeries(id) {
+            graphSeries = graphSeries.filter(s => s.id !== id);
+            renderGraphSeriesList();
+            updateChart();
+        }
+
+        function renderAll() {
+            renderSimulation();
+            updateDashboard();
+            renderCarList();
+            renderTrackSegmentList();
+            renderCustomParamList();
+            renderGraphSeriesList();
+        }
+        function renderSimulation() {
+            simCanvas.width = simCanvas.offsetWidth; simCanvas.height = simCanvas.offsetHeight;
+            const H = simCanvas.height, W = simCanvas.width, roadY = H * 0.7;
+            const carH = 20, carW = 40;
+            simCtx.clearRect(0, 0, W, H);
+            
+            const viewMin = viewCenter - viewWidth / 2;
+            const toScreenX = (worldX) => (worldX - viewMin) / viewWidth * W;
+
+            const interval = Math.pow(10, Math.floor(Math.log10(viewWidth / 5)));
+            const majorInterval = [2, 2.5, 5, 10].find(i => interval * i > viewWidth / 12) * interval || interval;
+            
+            simCtx.strokeStyle = '#adb5bd'; simCtx.fillStyle = '#6c757d'; simCtx.font = '10px Arial'; simCtx.textAlign = 'center';
+            const firstTick = Math.floor(viewMin / majorInterval) * majorInterval;
+            for (let i = firstTick; i <= viewCenter + viewWidth / 2; i += majorInterval) {
+                const screenX = toScreenX(i);
+                simCtx.beginPath(); simCtx.moveTo(screenX, roadY); simCtx.lineTo(screenX, roadY + 8); simCtx.stroke();
+                simCtx.fillText(i.toFixed(0), screenX, roadY + 20);
+            }
+
+            simCtx.lineWidth = 2; simCtx.beginPath(); simCtx.moveTo(0, roadY); simCtx.lineTo(W, roadY); simCtx.stroke();
+            
+            cars.forEach(car => {
+                const carScreenX = toScreenX(car.x);
+                simCtx.fillStyle = car.color;
+                simCtx.fillRect(carScreenX - carW / 2, roadY - carH, carW, carH);
+                simCtx.fillStyle = '#333';
+                simCtx.beginPath(); simCtx.arc(carScreenX - carW / 4, roadY, 5, 0, 2 * Math.PI); simCtx.fill();
+                simCtx.beginPath(); simCtx.arc(carScreenX + carW / 4, roadY, 5, 0, 2 * Math.PI); simCtx.fill();
+            });
+        }
+       
+        function updateDashboard() {
+            const content = document.getElementById('dashboard-content');
+            content.innerHTML = cars.map(car => {
+                 const customParamsHTML = customParams.map(p => {
+                    const key = 'custom_' + p.id;
+                    const dataArray = car.data[key];
+                    const value = dataArray && dataArray.length > 0 ? dataArray[dataArray.length - 1] : NaN;
+                    return `<span>${p.name}:</span> <span>${isFinite(value) ? value.toFixed(2) : 'N/A'}</span>`;
+                }).join('');
+                
+                return `
+                    <div class="car-dashboard">
+                        <div class="car-dashboard-header">
+                            <div class="car-color-indicator" style="background-color: ${car.color};"></div>
+                            <span>${car.name}</span>
+                        </div>
+                        <div class="dashboard-grid">
+                            <span>时间 (t):</span> <span>${simulationTime.toFixed(2)} s</span>
+                            <span>位移 (x):</span> <span>${car.x.toFixed(2)} m</span>
+                            <span>速度 (v):</span> <span>${car.v.toFixed(2)} m/s</span>
+                            <span>加速度 (a):</span> <span>${car.a.toFixed(2)} m/s²</span>
+                            ${customParamsHTML}
+                        </div>
+                    </div>
+                `;
+            }).join('<hr style="border:0; border-top: 1px solid var(--border-color); margin: 15px 0;">');
+        }
+        function renderCarList() {
+            document.getElementById('car-list').innerHTML = cars.map(car => `
+                <div class="list-item">
+                    <span>${car.name}</span>
+                    <div>
+                        <button onclick="editCar(${car.id})">编辑</button>
+                        <button class="delete-btn" onclick="removeCar(${car.id})">&times;</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        function renderTrackSegmentList() {
+            document.getElementById('track-segment-list').innerHTML = trackSegments.map(s => `
+                 <div class="list-item">
+                    <span>${s.start.toFixed(0)}m - ${s.end.toFixed(0)}m</span>
+                     <div>
+                        <button onclick="editTrackSegment(${s.id})">编辑</button>
+                        <button class="delete-btn" onclick="removeTrackSegment(${s.id})">&times;</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        function renderCustomParamList() {
+             document.getElementById('custom-param-list').innerHTML = customParams.map(p => `
+                 <div class="list-item">
+                    <span>${p.name}</span>
+                    <button class="delete-btn" onclick="removeCustomParam(${p.id})">&times;</button>
+                </div>
+            `).join('');
+        }
+        function renderGraphSeriesList() {
+            document.getElementById('graph-series-list').innerHTML = graphSeries.map(s => `
+                <div class="list-item">
+                    <span>${s.carName} (${s.yAxisLabel})</span>
+                    <button class="delete-btn" onclick="removeGraphSeries(${s.id})">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        function updateSeriesCarSelect() { document.getElementById('series-car-select').innerHTML = cars.map(c => `<option value="${c.id}">${c.name}</option>`).join(''); }
+
+        function updateGraphYAxisSelect() {
+            const select = document.getElementById('series-y-axis-select');
+            select.innerHTML = '';
+            const standardOptions = { 'x': '位移 (x)', 'v': '速度 (v)', 'a': '加速度 (a)' };
+            for (const [value, text] of Object.entries(standardOptions)) {
+                select.add(new Option(text, value));
+            }
+            customParams.forEach(p => {
+                select.add(new Option(p.name, 'custom_' + p.id));
+            });
+        }
+
+        function createChart() {
+             chart = new Chart(graphCanvas.getContext('2d'), {
+                type: 'line', data: { datasets: [] },
+                options: { responsive: true, maintainAspectRatio: false,
+                    scales: { 
+                        x: { type: 'linear', position: 'bottom', title: { display: true, text: '时间 (t)' } },
+                        y: { title: { display: true, text: 'Y 轴' }, beginAtZero: false } 
+                    },
+                    plugins: { tooltip: { mode: 'index', intersect: false, }, legend: { position: 'top' } }
+                }
+            });
+        }
+        
+        function updateChart() {
+            if (!chart || !graphSeries) return;
+            const xAxisProp = document.getElementById('x-axis-select').value;
+            chart.options.scales.x.title.text = `${xAxisProp} 轴`;
+
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+            chart.data.datasets = graphSeries.map(series => {
+                const car = cars.find(c => c.id === series.carId); 
+                if (!car || !car.data[xAxisProp] || car.data[xAxisProp].length === 0) return null;
+                
+                const dataPoints = car.data[xAxisProp].map((val, i) => ({ x: val, y: car.data[series.yAxis] ? car.data[series.yAxis][i] : NaN }));
+                
+                dataPoints.forEach(p => {
+                    if (isFinite(p.x) && isFinite(p.y)) {
+                       if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                       if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+                    }
+                });
+
+                return {
+                    label: `${series.carName} - ${series.yAxisLabel}`,
+                    data: dataPoints,
+                    borderColor: series.color, fill: false, tension: 0.1, pointRadius: 0
+                };
+            }).filter(Boolean);
+
+            if (!isFinite(minX)) {
+                 minX = 0; maxX = 10; minY = 0; maxY = 10;
+            }
+            const xRange = maxX - minX || 1;
+            const yRange = maxY - minY || 1;
+            chart.options.scales.x.min = minX - xRange * 0.05;
+            chart.options.scales.x.max = maxX + xRange * 0.05;
+            chart.options.scales.y.min = minY - yRange * 0.1;
+            chart.options.scales.y.max = maxY + yRange * 0.1;
+            
+            chart.update('none');
+        }
+        
+        function initializeDefaultState() {
+            const firstCar = {
+                id: Date.now(), name: `小车 1`, color: colors[colorIndex++ % colors.length], 
+                m: 1, initialX: 0, initialV: 10, F_traction: 0, k_air: 0.1, initialA: 0,
+                mode: 'force', data: {},
+            };
+            cars.push(firstCar);
+            
+            addTrackSegment(); trackSegments[0].start = -100; trackSegments[0].end = 100; trackSegments[0].mu = 0;
+            updateSeriesCarSelect();
+            updateGraphYAxisSelect();
+            renderCarList();
+            resetSimulation();
+        }
+        
+        let strobeData = [];
+        
+        function generateStrobeData() {
+            strobeData = [];
+            if (cars.length === 0 || cars[0].data.t.length < 2) return;
+            
+            const totalTime = cars[0].data.t[cars[0].data.t.length - 1];
+            const intervalTime = parseFloat(document.getElementById('strobe-interval-input').value) || 1;
+             if(intervalTime <= 0) return;
+
+            const numPoints = Math.floor(totalTime / intervalTime);
+            
+            for (let i = 0; i <= numPoints; i++) {
+                const timePoint = i * intervalTime;
+                if (timePoint > totalTime && i > 0) break;
+                const row = { t: timePoint };
+                
+                cars.forEach(car => {
+                    let closestIndex = -1;
+                    for(let j=0; j<car.data.t.length; j++) {
+                        if(car.data.t[j] >= timePoint) {
+                            closestIndex = j;
+                            break;
+                        }
+                    }
+                    if (closestIndex === -1) closestIndex = car.data.t.length-1;
+
+                    if (closestIndex !== -1) {
+                        row[`car_${car.id}_x`] = car.data.x[closestIndex];
+                        row[`car_${car.id}_v`] = car.data.v[closestIndex];
+                    }
+                });
+                strobeData.push(row);
+            }
+        }
+
+        function renderStrobeSnapshot() {
+            const canvas = document.getElementById('strobe-snapshot-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+            const H = canvas.height, W = canvas.width, roadY = H * 0.7;
+            const carH = 15, carW = 30;
+
+            const allX = strobeData.flatMap(row => cars.map(car => row[`car_${car.id}_x`])).filter(x => x !== undefined);
+            if (allX.length === 0) {
+                 ctx.clearRect(0, 0, W, H);
+                return;
+            };
+            
+            const minX = Math.min(...allX); const maxX = Math.max(...allX);
+            const worldW = (maxX - minX) === 0 ? 40 : (maxX - minX) * 1.2 + 20;
+            const worldMin = minX - (worldW - (maxX-minX))/2;
+            const toScreenX = (worldX) => (worldX - worldMin) / worldW * W;
+            ctx.clearRect(0, 0, W, H);
+            
+            strobeData.forEach(row => {
+                cars.forEach(car => {
+                    const x = row[`car_${car.id}_x`];
+                    if (x !== undefined) {
+                        ctx.fillStyle = car.color;
+                        ctx.globalAlpha = 0.5;
+                        const screenX = toScreenX(x);
+                        ctx.fillRect(screenX - carW / 2, roadY - carH, carW, carH);
+                    }
+                });
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        function renderStrobeTable() {
+            const table = document.getElementById('strobe-table');
+            const showT = document.getElementById('strobe-col-t').checked;
+            const showX = document.getElementById('strobe-col-x').checked;
+            const showV = document.getElementById('strobe-col-v').checked;
+
+            let headerHTML = '<thead><tr>';
+            if (showT) headerHTML += '<th>时间 (s)</th>';
+            cars.forEach(car => {
+                if(showX) headerHTML += `<th>${car.name} 位置 (m)</th>`;
+                if(showV) headerHTML += `<th>${car.name} 速度 (m/s)</th>`;
+            });
+            headerHTML += '</tr></thead>';
+
+            let bodyHTML = '<tbody>';
+            strobeData.forEach(row => {
+                bodyHTML += '<tr>';
+                if(showT) bodyHTML += `<td>${row.t.toFixed(2)}</td>`;
+                cars.forEach(car => {
+                    if (showX) bodyHTML += `<td>${row[`car_${car.id}_x`] !== undefined ? row[`car_${car.id}_x`].toFixed(2) : 'N/A'}</td>`;
+                    if (showV) bodyHTML += `<td>${row[`car_${car.id}_v`] !== undefined ? row[`car_${car.id}_v`].toFixed(2) : 'N/A'}</td>`;
+                });
+                bodyHTML += '</tr>';
+            });
+            bodyHTML += '</tbody>';
+            table.innerHTML = headerHTML + bodyHTML;
+        }
+        
+        function runChaseAnalysis() {
+            const car1Id = parseInt(document.getElementById('chase-car1-select').value);
+            const car2Id = parseInt(document.getElementById('chase-car2-select').value);
+            if (car1Id === car2Id) {
+                alert('请选择两辆不同的小车进行分析。');
+                return;
+            }
+            const car1 = cars.find(c => c.id === car1Id);
+            const car2 = cars.find(c => c.id === car2Id);
+
+            const encounters = findEncounters(car1, car2);
+
+            const xtCtx = document.getElementById('chase-xt-canvas').getContext('2d');
+            const vtCtx = document.getElementById('chase-vt-canvas').getContext('2d');
+            
+            if (chaseXtChart) chaseXtChart.destroy();
+            if (chaseVtChart) chaseVtChart.destroy();
+
+            chaseXtChart = new Chart(xtCtx, createChaseChartConfig('x', '位置 (m)', car1, car2, encounters));
+            chaseVtChart = new Chart(vtCtx, createChaseChartConfig('v', '速度 (m/s)', car1, car2));
+
+            const resultsDiv = document.getElementById('chase-encounter-points');
+            if (encounters.length > 0) {
+                resultsDiv.innerHTML = '<h4>相遇点:</h4>' + encounters.map((e, i) => `<p>第 ${i+1} 次相遇: 时间 t = ${e.t.toFixed(2)}s, 位置 x = ${e.x.toFixed(2)}m</p>`).join('');
+            } else {
+                resultsDiv.innerHTML = '<h4>未找到相遇点。</h4>';
+            }
+            document.getElementById('chase-results-container').style.display = 'block';
+            resetAreaSelection();
+        }
+
+        function findEncounters(car1, car2) {
+            const encounters = [];
+            const data1 = car1.data;
+            const data2 = car2.data;
+            const len = Math.min(data1.t.length, data2.t.length);
+            
+            for (let i = 1; i < len; i++) {
+                const prevDiff = data1.x[i-1] - data2.x[i-1];
+                const currDiff = data1.x[i] - data2.x[i];
+                if (Math.sign(prevDiff) !== Math.sign(currDiff)) {
+                    const t1 = data1.t[i-1], x11 = data1.x[i-1], x21 = data2.x[i-1];
+                    const t2 = data1.t[i],   x12 = data1.x[i],   x22 = data2.x[i];
+                    const v1 = (x12 - x11) / (t2 - t1);
+                    const v2 = (x22 - x21) / (t2 - t1);
+                    if (Math.abs(v1 - v2) < 1e-6) continue;
+                    const encounterTime = t1 + (x21 - x11) / (v1 - v2);
+                    const encounterPos = x11 + v1 * (encounterTime - t1);
+                    encounters.push({ t: encounterTime, x: encounterPos });
+                }
+            }
+            return encounters;
+        }
+
+        function createChaseChartConfig(yKey, yLabel, car1, car2, annotations = []) {
+            const datasets = [
+                { label: car1.name, data: car1.data.t.map((t, i) => ({x: t, y: car1.data[yKey][i]})), borderColor: car1.color, fill: false, pointRadius: 0 },
+                { label: car2.name, data: car2.data.t.map((t, i) => ({x: t, y: car2.data[yKey][i]})), borderColor: car2.color, fill: false, pointRadius: 0 }
+            ];
+            
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            datasets.forEach(ds => {
+                ds.data.forEach(p => {
+                    if (isFinite(p.x) && isFinite(p.y)) {
+                       if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                       if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+                    }
+                });
+            });
+             if (!isFinite(minX)) { minX = 0; maxX = 10; minY = 0; maxY = 10; }
+
+            const xRange = maxX - minX || 1; 
+            const yRange = maxY - minY || 1;
+            const midY = (minY + maxY) / 2;
+            const padding = Math.max(yRange, Math.abs(midY), 5) * 1.2;
+            
+            return {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { 
+                        x: { type: 'linear', title: { display: true, text: '时间 (s)' }, min: minX - xRange * 0.05, max: maxX + xRange * 0.05 },
+                        y: { title: { display: true, text: yLabel }, min: minY - yRange * 0.1, max: maxY + yRange * 0.1 } 
+                    },
+                    plugins: {
+                        annotation: {
+                            annotations: annotations.map(e => ({
+                                type: 'line',
+                                scaleID: 'x',
+                                value: e.t,
+                                borderColor: 'red',
+                                borderWidth: 1,
+                                borderDash: [6, 6],
+                                label: { content: `t=${e.t.toFixed(2)}`, enabled: true, position: 'start' }
+                            }))
+                        }
+                    }
+                }
+            };
+        }
+        
+        function switchPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+
+            if (pageId === 'page-strobe') {
+                if (isRunning) pauseSimulation();
+                generateStrobeData();
+                renderStrobeSnapshot();
+                renderStrobeTable();
+            }
+            if (pageId === 'page-chase') {
+                if (isRunning) pauseSimulation();
+                const car1Select = document.getElementById('chase-car1-select');
+                const car2Select = document.getElementById('chase-car2-select');
+                car1Select.innerHTML = cars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                car2Select.innerHTML = car1Select.innerHTML;
+                if (cars.length > 1) {
+                    car2Select.selectedIndex = 1;
+                }
+                document.getElementById('chase-results-container').style.display = 'none';
+            }
+             if (pageId === 'page-fitting') {
+                if (isRunning) pauseSimulation();
+                const carSelect = document.getElementById('fitting-car-select');
+                carSelect.innerHTML = cars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                document.getElementById('fitting-results-container').style.display = 'none';
+            }
+        }
+        
+        function runFittingAnalysis() {
+            const carId = parseInt(document.getElementById('fitting-car-select').value);
+            const datasetKey = document.getElementById('fitting-data-select').value;
+            const model = document.getElementById('fitting-model-select').value;
+            
+            const car = cars.find(c => c.id === carId);
+            if (!car) return;
+            
+            const [yKey, xKey] = datasetKey.split('-');
+            const dataPoints = car.data[xKey].map((val, i) => ({ x: val, y: car.data[yKey][i] })).filter(p => isFinite(p.x) && isFinite(p.y));
+
+            if (dataPoints.length < 3 && !['lagrange', 'fourier'].includes(model)) {
+                return alert('数据点不足以进行拟合。');
+            }
+
+            let fitResult = {};
+            let fittedData;
+            
+            switch(model) {
+                case 'linear':
+                    fitResult = polynomialRegression(dataPoints, 1);
+                    break;
+                case 'quadratic':
+                    fitResult = polynomialRegression(dataPoints, 2);
+                    break;
+                case 'cubic':
+                    fitResult = polynomialRegression(dataPoints, 3);
+                    break;
+                case 'exponential':
+                    fitResult = exponentialRegression(dataPoints);
+                    break;
+                case 'logarithmic':
+                    fitResult = logarithmicRegression(dataPoints);
+                    break;
+                case 'lagrange':
+                    if (dataPoints.length < 2) return alert('拉格朗日插值至少需要2个点。');
+                    fitResult.equation = '拉格朗日插值曲线';
+                    fitResult.r2 = 1;
+                    break;
+                case 'fourier':
+                    if (dataPoints.length < 2) return alert('傅里叶拟合至少需要2个点。');
+                    const terms = parseInt(document.getElementById('fourier-terms-input').value);
+                    fitResult = fourierRegression(dataPoints, terms);
+                    break;
+            }
+
+            const resultsContainer = document.getElementById('fitting-results-container');
+            const formulaDiv = document.getElementById('fitting-formula-display');
+            const ctx = document.getElementById('fitting-chart-canvas').getContext('2d');
+            
+            if (fittingChart) fittingChart.destroy();
+            
+            if (fitResult && fitResult.equation) {
+                const minX = Math.min(...dataPoints.map(p=>p.x));
+                const maxX = Math.max(...dataPoints.map(p=>p.x));
+                fittedData = [];
+                const plotPoints = 200;
+                for(let i=0; i<=plotPoints; i++) {
+                    const x = minX + i/plotPoints * (maxX - minX);
+                    let y;
+                    if (model === 'lagrange') {
+                        y = lagrangeInterpolation(dataPoints, x);
+                    } else {
+                        y = fitResult.predict(x);
+                    }
+                    fittedData.push({x, y});
+                }
+
+                fittingChart = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            { label: '原始数据', data: dataPoints, backgroundColor: car.color, type: 'scatter' },
+                            { label: '拟合/插值曲线', data: fittedData, borderColor: '#ff6384', borderWidth: 2, fill: false, type: 'line', pointRadius: 0, tension: 0.1 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: { x: { title: { display: true, text: `${xKey} 轴` } }, y: { title: { display: true, text: `${yKey} 轴` } } }
+                    }
+                });
+                
+                let r2Text = fitResult.r2 !== undefined ? `<br> <strong>R²:</strong> ${fitResult.r2.toFixed(4)}` : '';
+                formulaDiv.innerHTML = `<strong>模型:</strong> ${fitResult.equation} ${r2Text}`;
+                resultsContainer.style.display = 'block';
+            } else {
+                formulaDiv.innerHTML = '无法计算。请检查数据是否适合此模型 (例如，指数/对数拟合要求 y>0)。';
+                resultsContainer.style.display = 'block';
+            }
+        }
+
+        // --- NEW/UPDATED FITTING FUNCTIONS ---
+
+        function solveLinearSystem(A, B) {
+            const n = A.length;
+            for (let i = 0; i < n; i++) {
+                let maxEl = Math.abs(A[i][i]);
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) { if (Math.abs(A[k][i]) > maxEl) { maxEl = Math.abs(A[k][i]); maxRow = k; } }
+                for (let k = i; k < n; k++) { [A[i][k], A[maxRow][k]] = [A[maxRow][k], A[i][k]]; }
+                [B[i], B[maxRow]] = [B[maxRow], B[i]];
+                for (let k = i + 1; k < n; k++) {
+                    if (A[i][i] === 0) continue;
+                    const c = -A[k][i] / A[i][i];
+                    for (let j = i; j < n; j++) { if (i === j) { A[k][j] = 0; } else { A[k][j] += c * A[i][j]; } }
+                    B[k] += c * B[i];
+                }
+            }
+            const x = new Array(n);
+            for (let i = n - 1; i > -1; i--) {
+                if (A[i][i] === 0) return null;
+                x[i] = B[i] / A[i][i];
+                for (let k = i - 1; k > -1; k--) { B[k] -= A[k][i] * x[i]; }
+            }
+            return x;
+        }
+
+        function polynomialRegression(data, degree) {
+            if (data.length <= degree) return null;
+            const n = degree + 1;
+            const A = Array(n).fill(0).map(() => Array(n).fill(0));
+            const B = Array(n).fill(0);
+            const xKey = document.getElementById('fitting-data-select').value.split('-')[1] || 'x';
+
+            for (const p of data) {
+                for (let row = 0; row < n; row++) {
+                    B[row] += p.y * Math.pow(p.x, row);
+                    for (let col = 0; col < n; col++) { A[row][col] += Math.pow(p.x, row + col); }
+                }
+            }
+            
+            const coeffs = solveLinearSystem(A, B);
+            if (!coeffs) return null;
+            
+            const predict = (x) => coeffs.reduce((sum, c, i) => sum + c * Math.pow(x, i), 0);
+            const meanY = data.reduce((sum, p) => sum + p.y, 0) / data.length;
+            const ssTot = data.reduce((sum, p) => sum + Math.pow(p.y - meanY, 2), 0);
+            const ssRes = data.reduce((sum, p) => sum + Math.pow(p.y - predict(p.x), 2), 0);
+            const r2 = ssTot === 0 ? 1 : 1 - (ssRes / ssTot);
+            
+            let equation = `y(${xKey}) = `;
+            const terms = [];
+            coeffs.slice().reverse().forEach((c, i) => {
+                const power = degree - i;
+                if (Math.abs(c) < 1e-4) return;
+                const sign = c < 0 ? '-' : '+';
+                const val = Math.abs(c);
+                const valStr = (val.toFixed(2) === '1.00' && power > 0) ? '' : val.toExponential(2);
+                let termStr = '';
+                if (power > 1) termStr = `${valStr}${xKey}^${power}`;
+                else if (power === 1) termStr = `${valStr}${xKey}`;
+                else termStr = val.toExponential(2);
+                terms.push({ sign, str: termStr });
+            });
+            
+            if (terms.length === 0) { equation += '0.00'; } 
+            else {
+                if (terms[0].sign === '-') equation += '-';
+                equation += terms[0].str;
+                for (let i = 1; i < terms.length; i++) { equation += ` ${terms[i].sign} ${terms[i].str}`; }
+            }
+            return { coeffs, equation, r2, predict };
+        }
+        
+        function exponentialRegression(data) {
+            const transformedData = data.filter(p => p.y > 0).map(p => ({ x: p.x, y: Math.log(p.y) }));
+            if (transformedData.length < 2) return null;
+            const linearFit = polynomialRegression(transformedData, 1);
+            if (!linearFit) return null;
+            const b = linearFit.coeffs[1];
+            const a = Math.exp(linearFit.coeffs[0]);
+            const xKey = document.getElementById('fitting-data-select').value.split('-')[1] || 'x';
+            const equation = `y(${xKey}) = ${a.toExponential(2)} * exp(${b.toExponential(2)} * ${xKey})`;
+            const predict = (x) => a * Math.exp(b * x);
+            const meanY = data.reduce((sum, p) => sum + p.y, 0) / data.length;
+            const ssTot = data.reduce((sum, p) => sum + Math.pow(p.y - meanY, 2), 0);
+            const ssRes = data.reduce((sum, p) => sum + Math.pow(p.y - predict(p.x), 2), 0);
+            const r2 = ssTot === 0 ? 1 : 1 - (ssRes / ssTot);
+            return { equation, r2, predict };
+        }
+
+        function logarithmicRegression(data) {
+            const transformedData = data.filter(p => p.x > 0).map(p => ({ x: Math.log(p.x), y: p.y }));
+             if (transformedData.length < 2) return null;
+            const linearFit = polynomialRegression(transformedData, 1);
+            if (!linearFit) return null;
+            const b = linearFit.coeffs[1];
+            const a = linearFit.coeffs[0];
+            const xKey = document.getElementById('fitting-data-select').value.split('-')[1] || 'x';
+            const equation = `y(${xKey}) = ${b.toExponential(2)} * ln(${xKey}) + ${a.toExponential(2)}`;
+            const predict = (x) => x > 0 ? b * Math.log(x) + a : NaN;
+            const meanY = data.reduce((sum, p) => sum + p.y, 0) / data.length;
+            const ssTot = data.reduce((sum, p) => sum + Math.pow(p.y - meanY, 2), 0);
+            const ssRes = data.reduce((sum, p) => sum + Math.pow(p.y - predict(p.x), 2), 0);
+            const r2 = ssTot === 0 ? 1 : 1 - (ssRes / ssTot);
+            return { equation, r2, predict };
+        }
+        
+        function lagrangeInterpolation(points, x) {
+            let sum = 0;
+            for (let i = 0; i < points.length; i++) {
+                let term = points[i].y;
+                for (let j = 0; j < points.length; j++) {
+                    if (i !== j) {
+                        term *= (x - points[j].x) / (points[i].x - points[j].x);
+                    }
+                }
+                sum += term;
+            }
+            return sum;
+        }
+
+        function fourierRegression(data, numTerms) {
+            const n = data.length;
+            if (n < 2) return null;
+
+            const minX = data[0].x;
+            const L = data[n-1].x - minX;
+            if (L <= 0) return null;
+
+            const basisFunctions = [ (x) => 1 ];
+            for(let k=1; k<=numTerms; k++) {
+                basisFunctions.push( (x) => Math.cos(2 * Math.PI * k * (x-minX) / L) );
+                basisFunctions.push( (x) => Math.sin(2 * Math.PI * k * (x-minX) / L) );
+            }
+
+            const numBasis = basisFunctions.length;
+            const A = Array(numBasis).fill(0).map(() => Array(numBasis).fill(0));
+            const B = Array(numBasis).fill(0);
+
+            for(const p of data) {
+                for(let row=0; row<numBasis; row++) {
+                    B[row] += p.y * basisFunctions[row](p.x);
+                    for(let col=0; col<numBasis; col++) {
+                        A[row][col] += basisFunctions[row](p.x) * basisFunctions[col](p.x);
+                    }
+                }
+            }
+            
+            const coeffs = solveLinearSystem(A, B);
+            if(!coeffs) return null;
+
+            const predict = (x) => coeffs.reduce((sum, c, i) => sum + c * basisFunctions[i](x), 0);
+            
+            const xKey = document.getElementById('fitting-data-select').value.split('-')[1] || 'x';
+            let equation = `y(${xKey}) ≈ ${coeffs[0].toExponential(2)}`;
+            for(let k=1; k<=numTerms; k++) {
+                const cosCoeff = coeffs[2*k-1];
+                const sinCoeff = coeffs[2*k];
+                if (Math.abs(cosCoeff) > 1e-4) equation += ` + ${cosCoeff.toExponential(2)}cos(${k}ωx)`;
+                if (Math.abs(sinCoeff) > 1e-4) equation += ` + ${sinCoeff.toExponential(2)}sin(${k}ωx)`;
+            }
+
+             const meanY = data.reduce((sum, p) => sum + p.y, 0) / data.length;
+            const ssTot = data.reduce((sum, p) => sum + Math.pow(p.y - meanY, 2), 0);
+            const ssRes = data.reduce((sum, p) => sum + Math.pow(p.y - predict(p.x), 2), 0);
+            const r2 = ssTot === 0 ? 1 : 1 - (ssRes / ssTot);
+
+            return { equation, r2, predict };
+        }
+
+        // --- NEW AREA CALCULATION LOGIC ---
+
+        function handleChaseVTChartClick(event) {
+            if (!chaseVtChart) return;
+            const points = chaseVtChart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+            if (points.length === 0) return;
+
+            const { datasetIndex, index } = points[0];
+
+            if (areaSelection.datasetIndex !== null && areaSelection.datasetIndex !== datasetIndex) {
+                resetAreaSelection();
+            }
+
+            areaSelection.datasetIndex = datasetIndex;
+            if (areaSelection.startIndex === null) {
+                areaSelection.startIndex = index;
+            } else {
+                areaSelection.endIndex = index;
+                if (areaSelection.startIndex > areaSelection.endIndex) {
+                    [areaSelection.startIndex, areaSelection.endIndex] = [areaSelection.endIndex, areaSelection.startIndex]; // Swap
+                }
+                calculateAndDisplayArea();
+            }
+            updateChaseVTChartAnnotations();
+        }
+
+        function resetAreaSelection() {
+            areaSelection = { datasetIndex: null, startIndex: null, endIndex: null };
+            document.getElementById('chase-area-result').innerHTML = '点击v-t图上的两点以计算面积。';
+            if(chaseVtChart) {
+                updateChaseVTChartAnnotations();
+            }
+        }
+
+        function calculateAndDisplayArea() {
+            if (areaSelection.datasetIndex === null || areaSelection.startIndex === null || areaSelection.endIndex === null) return;
+            
+            const dataset = chaseVtChart.data.datasets[areaSelection.datasetIndex];
+            const data = dataset.data.slice(areaSelection.startIndex, areaSelection.endIndex + 1);
+
+            let area = 0;
+            for (let i = 0; i < data.length - 1; i++) {
+                const p1 = data[i];
+                const p2 = data[i+1];
+                const dx = p2.x - p1.x;
+                const avgY = (p1.y + p2.y) / 2;
+                area += dx * avgY;
+            }
+            
+            const resultDiv = document.getElementById('chase-area-result');
+            resultDiv.innerHTML = `<strong>面积计算 (${dataset.label}):</strong> 从 t = ${data[0].x.toFixed(2)}s 到 t = ${data[data.length-1].x.toFixed(2)}s, 面积 (位移) ≈ <strong>${area.toFixed(3)} m</strong> <button onclick="resetAreaSelection()">清除选择</button>`;
+        }
+
+        function updateChaseVTChartAnnotations() {
+            if (!chaseVtChart) return;
+
+            const annotations = {};
+
+            if(areaSelection.startIndex !== null) {
+                const dataset = chaseVtChart.data.datasets[areaSelection.datasetIndex];
+                const point = dataset.data[areaSelection.startIndex];
+                annotations['point1'] = { type: 'point', xValue: point.x, yValue: point.y, backgroundColor: 'rgba(255, 99, 132, 0.8)', radius: 5 };
+            }
+             if(areaSelection.endIndex !== null) {
+                const dataset = chaseVtChart.data.datasets[areaSelection.datasetIndex];
+                const point = dataset.data[areaSelection.endIndex];
+                annotations['point2'] = { type: 'point', xValue: point.x, yValue: point.y, backgroundColor: 'rgba(255, 99, 132, 0.8)', radius: 5 };
+            
+                const startPoint = dataset.data[areaSelection.startIndex];
+                annotations['area'] = {
+                    type: 'box',
+                    xMin: startPoint.x,
+                    xMax: point.x,
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 0.5)',
+                    borderWidth: 1
+                }
+             }
+
+            chaseVtChart.options.plugins.annotation.annotations = annotations;
+            chaseVtChart.update();
+        }
+
+    </script>
+</body>
+</html>
